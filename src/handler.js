@@ -22,16 +22,21 @@ const validateInput = (payload, isEdit = false) => {
     publisher: "penerbit",
     pageCount: "pageCount",
     readPage: "readPage",
+    reading: "reading",
   };
 
   const errors = Object.entries(requiredFields).reduce((acc, [key, label]) => {
-    if (!isEdit && !payload[key]) {
+    if (!isEdit && payload[key] === undefined) {
       acc.push(`Mohon isi ${label} buku`);
     }
     return acc;
   }, []);
 
-  if (payload.readPage > payload.pageCount) {
+  if (
+    payload.readPage !== undefined &&
+    payload.pageCount !== undefined &&
+    payload.readPage > payload.pageCount
+  ) {
     errors.push("readPage tidak boleh lebih besar dari pageCount");
   }
 
@@ -76,7 +81,29 @@ const addBookHandler = (request, h) => {
 
 // Handler untuk mendapatkan semua buku
 const getAllBooksHandler = (request, h) => {
-  const minimalBooks = books.map(({ id, name, publisher }) => ({
+  const { name, reading, finished } = request.query;
+
+  let filteredBooks = books;
+
+  if (name) {
+    filteredBooks = filteredBooks.filter((book) =>
+      book.name.toLowerCase().includes(name.toLowerCase())
+    );
+  }
+
+  if (reading !== undefined) {
+    const isReading = reading === "1";
+    filteredBooks = filteredBooks.filter((book) => book.reading === isReading);
+  }
+
+  if (finished !== undefined) {
+    const isFinished = finished === "1";
+    filteredBooks = filteredBooks.filter(
+      (book) => book.finished === isFinished
+    );
+  }
+
+  const minimalBooks = filteredBooks.map(({ id, name, publisher }) => ({
     id,
     name,
     publisher,
@@ -103,7 +130,6 @@ const editBookByIdHandler = (request, h) => {
   const payload = request.payload;
   const index = books.findIndex((book) => book.id === id);
 
-  // Jika ID tidak ditemukan
   if (index === -1) {
     return createResponse(
       h,
@@ -114,7 +140,6 @@ const editBookByIdHandler = (request, h) => {
     );
   }
 
-  // Validasi input (pastikan tidak ada field kosong atau invalid)
   const errors = validateInput(payload);
   if (errors.length > 0) {
     return createResponse(
@@ -122,11 +147,10 @@ const editBookByIdHandler = (request, h) => {
       "fail",
       `Gagal memperbarui buku. ${errors.join(", ")}`,
       null,
-      400 // Mengembalikan status 400 untuk input tidak valid
+      400
     );
   }
 
-  // Memastikan readPage tidak lebih besar dari pageCount
   if (payload.readPage > payload.pageCount) {
     return createResponse(
       h,
@@ -140,9 +164,8 @@ const editBookByIdHandler = (request, h) => {
   const updatedAt = new Date().toISOString();
   const finished = payload.pageCount === payload.readPage;
 
-  // Memperbarui buku dengan data baru
   books[index] = {
-    ...books[index], // Menjaga ID dan data sebelumnya
+    ...books[index],
     ...payload,
     finished,
     updatedAt,
